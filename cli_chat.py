@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 
-from rag_pipeline import answer_question, load_vectorstore
+from rag_pipeline import answer_question, load_vectorstore, OFF_TOPIC_RESPONSE
 
 load_dotenv()
 
@@ -24,8 +24,8 @@ if __name__ == "__main__":
 
         print(f"\nAssistant: {answer}")
 
-        if sources:
+        if answer != OFF_TOPIC_RESPONSE and sources:
             print("\nSources:")
-            for i, source in enumerate(sources[:3], start=1):
-                print(f"\nSource {i}:")
-                print(source.page_content)
+            for i, source in enumerate(sources, start=1):
+                print(f"\nSource {i} ({source['page']}):")
+                print(source["content"])

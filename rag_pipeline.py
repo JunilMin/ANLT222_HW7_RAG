@@ -14,7 +14,7 @@ INDEX_DIR = "faiss_index"
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 TOP_K = 4
-DISPLAY_SOURCES = 10
+DISPLAY_SOURCES = 3
 OFF_TOPIC_RESPONSE = "I’m sorry, I am only authorized to talk about the provided document."
 
 
@@ -23,7 +23,7 @@ def get_embeddings():
 
 
 def get_llm():
-    return ChatOpenAI(model="gpt-4o-mini", temperature=0.4)
+    return ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 
 def load_pdf_documents(pdf_path: str = PDF_FILENAME):
@@ -40,13 +40,17 @@ def split_documents(documents):
 
 
 def build_and_save_vectorstore(pdf_path: str = PDF_FILENAME, index_dir: str = INDEX_DIR):
-    if not Path(pdf_path).exists():
-        raise FileNotFoundError(f"{pdf_path} was not found in the project folder.")
+    pdf_file = Path(pdf_path)
 
-    documents = load_pdf_documents(pdf_path)
+    if not pdf_file.exists():
+        raise FileNotFoundError(f"{pdf_path} was not found in the same folder as the script.")
+
+    documents = load_pdf_documents(str(pdf_file))
     chunks = split_documents(documents)
+
     vectorstore = FAISS.from_documents(chunks, get_embeddings())
     vectorstore.save_local(index_dir)
+
     return vectorstore
 
 
@@ -62,24 +66,42 @@ def retrieve_top_chunks(question: str, vectorstore, k: int = TOP_K):
     return vectorstore.similarity_search(question, k=k)
 
 
+def format_sources(retrieved_docs, max_sources: int = DISPLAY_SOURCES):
+    sources = []
+
+    for doc in retrieved_docs[:max_sources]:
+        page_num = doc.metadata.get("page")
+        page_label = f"Page {page_num + 1}" if page_num is not None else "Page unknown"
+
+        sources.append(
+            {
+                "page": page_label,
+                "content": doc.page_content.strip()
+            }
+        )
+
+    return sources
+
+
 def answer_question(question: str, vectorstore):
     retrieved_docs = retrieve_top_chunks(question, vectorstore, k=TOP_K)
+
+    if not retrieved_docs:
+        return OFF_TOPIC_RESPONSE, []
+
     context = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
     prompt = PromptTemplate(
         input_variables=["context", "question", "off_topic_response"],
         template=(
-            "You are a friendly assistant.\n"
-            "Answer in a natural conversational style.\n\n"
-
-            "Rules:\n"
-            "1. Use ONLY the provided context\n"
-            "2. Provide detailed answers\n"
-            "3. If useful, include key information as a bullet list using '-'\n"
-            "4. Keep it simple and helpful\n"
-            "5. If not in context, say exactly:\n"
-            "{off_topic_response}\n\n"
-
+            "Answer the user's question using ONLY the context provided below.\n"
+            "You may paraphrase the context, summarize it, and answer using semantically matching information.\n"
+            "If the retrieved context contains the answer in meaning, answer normally.\n"
+            "If the answer cannot be found in the retrieved context, respond with exactly:\n"
+            "{off_topic_response}\n"
+            "Do not use outside knowledge.\n"
+            "Do not guess.\n"
+            "Do not add any extra explanation when the answer is not in the context.\n\n"
             "Context:\n{context}\n\n"
             "Question:\n{question}\n\n"
             "Answer:"
@@ -88,6 +110,7 @@ def answer_question(question: str, vectorstore):
 
     llm = get_llm()
     chain = prompt | llm
+
     response = chain.invoke(
         {
             "context": context,
@@ -95,4 +118,11 @@ def answer_question(question: str, vectorstore):
             "off_topic_response": OFF_TOPIC_RESPONSE,
         }
     )
-    return response.content.strip(), retrieved_docs
+
+    answer_text = response.content.strip()
+
+    if answer_text == OFF_TOPIC_RESPONSE:
+        return OFF_TOPIC_RESPONSE, []
+
+    sources = format_sources(retrieved_docs, max_sources=DISPLAY_SOURCES)
+    return answer_text, sources
