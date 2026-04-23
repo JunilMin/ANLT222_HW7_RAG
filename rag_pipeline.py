@@ -94,11 +94,13 @@ def answer_question(question: str, vectorstore):
     prompt = PromptTemplate(
         input_variables=["context", "question", "off_topic_response"],
         template=(
+            "You are a helpful assistant.\n"
             "Answer the user's question using ONLY the context provided below.\n"
+            "If the answer is not contained in the context, respond with: {off_topic_response}, Do not use outside knowledge\n"
             "You may paraphrase the context, summarize it, and answer using semantically matching information.\n"
             "If the retrieved context contains the answer in meaning, answer normally.\n"
-            "If the answer cannot be found in the retrieved context, respond with exactly:\n"
-            "{off_topic_response}\n"
+            # "If the answer cannot be found in the retrieved context, respond with exactly:\n"
+            # "{off_topic_response}\n"
             "Do not use outside knowledge.\n"
             "Do not guess.\n"
             "Do not add any extra explanation when the answer is not in the context.\n\n"
