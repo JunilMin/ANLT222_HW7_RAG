@@ -98,7 +98,6 @@ def answer_question(question: str, vectorstore):
             "You may paraphrase the context, summarize it, and answer using semantically matching information.\n"
             "If the retrieved context contains the answer in meaning, answer normally.\n"
             "If the answer cannot be found in the retrieved context, respond with exactly:\n"
-            # "Read user's question and provide a helpful response related to the document and user's intention\n"
             "{off_topic_response}\n"
             "Do not use outside knowledge.\n"
             "Do not guess.\n"
